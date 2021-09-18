@@ -28,6 +28,8 @@ void factorization (int n) {
     if (n > 2){
         printf("%d ", n);
     }
+
+    printf("\b");
 }
 
 int main(int argc, char** argv){

@@ -40,7 +40,7 @@ int main(int argc, char** argv){
     if (strcmp(argv[1],option) == 0){
         original = argv[2];
         while(!feof(stdin)){
-        str = getstring();
+            str = getstring();
             if (strcasestr(str,original)){
                 printf("%s\n", str);
             }
@@ -49,7 +49,7 @@ int main(int argc, char** argv){
     else {
         original = argv[1];
         while(!feof(stdin)){
-        str = getstring();
+            str = getstring();
             if (strstr(str,original)){
                 printf("%s\n", str);
             }

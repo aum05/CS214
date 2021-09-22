@@ -41,8 +41,24 @@ int main(int argc, char** argv){
     int index = 0;
     int count = 0;
 
-    if(argc == 2){
-        if(strcmp(argv[1], "-n") == 0){
+    if(argc == 1){
+        char **strings = NULL;
+        char *string;
+        for(index = 0; (string=get_strings()); ++index){
+            strings = (char**) realloc (strings, (index+1)*sizeof(*strings));
+            strings[index] = string;
+        }
+        strsort((const char**)strings, index);
+
+        printf("\nSorted:\n");
+
+        for(count = 0; count < index; ++count){
+            printf("%s\n", strings[count]);
+            free(strings[count]);
+        }
+        free(strings);
+    }
+    else if (strcmp(argv[1], "-n") == 0){
         int *numbers = NULL;
         int number;
         while (!feof(stdin))
@@ -61,24 +77,11 @@ int main(int argc, char** argv){
             printf("%d\n", numbers[count]);
         }
         free(numbers);
-        }
     }
+    
+
     else{
-        char **strings = NULL;
-        char *string;
-        for(index = 0; (string=get_strings()); ++index){
-            strings = (char**) realloc (strings, (index+1)*sizeof(*strings));
-            strings[index] = string;
-        }
-        strsort((const char**)strings, index);
-
-        printf("\nSorted:\n");
-
-        for(count = 0; count < index; ++count){
-            printf("%s\n", strings[count]);
-            free(strings[count]);
-        }
-        free(strings);
+       
     }
     
     return EXIT_SUCCESS;

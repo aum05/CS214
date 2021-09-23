@@ -2,6 +2,47 @@
 #include <stdio.h>
 #include <string.h>
 
+struct Node {
+    char *str;
+    int count;
+    struct Node* next;
+};
+
+struct Node* add(struct Node* head, char *str, int count){
+    struct Node* current = head;
+    struct Node* newNode = (struct Node*) malloc(sizeof(struct Node));
+
+    newNode->str = malloc(strlen(str)+1);
+    strcpy(newNode->str, str);
+    newNode->count = count;
+    newNode->next = NULL;
+
+    //If the linked list is empty
+    //That means the head node will be the first node
+    if (head == NULL){
+        head = newNode;
+        return head;
+    }
+    
+    while (current->next != NULL){
+        current = current->next;
+    }
+
+    //Once we have reached the last node of the current linked list
+    //Append the head node to the last node
+    //Making the head node the last node
+    current->next = newNode;
+    return head;
+}
+
+void printList(struct Node *head){
+  while (head != NULL)
+  {
+    printf("%d %s\n", head->count, head->str);
+    head = head->next;
+  }
+}
+
 char *getString(void){
     char *str = NULL;
     int c;
@@ -18,10 +59,10 @@ char *getString(void){
 }
 
 int main(int argc, char** argv){
+    struct Node* head = NULL;
     int ind = 0;
+    int count = 1;
     int str_count = 0;
-
-
     char **strings = NULL;
     char *str;
 
@@ -31,43 +72,24 @@ int main(int argc, char** argv){
         strings[ind] = str;
     }
 
-    char **uniq = NULL;
-    int index = 0;
-    int i;
-    int count = 1;
-    char *num;
-    //Find unique strings
-    for(i = 0; i < ind; i++){
-        uniq = (char**) realloc (uniq, (index+1)*sizeof(*uniq));
-        if (asprintf(&num, "%d", count) == -1) {
-            perror("asprintf");
+    for(int i = 0; i<ind; ++i){
+        if(i == 0){
+            head = add(head,strings[i],count);
+            continue;
         }
-        if(index == 0){
-            uniq[index] = strcat(num, strcat(" ", strings[index]));
-            ++index;
-        }
-        else if (strcmp(strings[i],strings[i-1]) == 0){
+        if(strcmp(strings[i], strings[i-1]) == 0){
             ++count;
-            asprintf(&num, "%d", count);
-            uniq[index] = strcat(num, strcat(" ", strings[i]));
+            head->count = count;
         }
         else{
             count = 1;
-            asprintf(&num, "%d", count);
-            uniq[index] = strcat(num, strcat(" ", strings[i]));
-            ++index;
+            head = add(head,strings[i],count);
         }
     }
 
-    free(num);
-
+    printList(head);
     //Since each string in the strings array has been allocated memory
     //Each string needs to be free individually
-    for(str_count = 0; str_count < index; ++str_count){
-        printf("%s\n", uniq[str_count]);
-        free(uniq[str_count]);
-    }
-    free(uniq);
     for(str_count = 0; str_count < ind; ++str_count){
         free(strings[str_count]);
     }

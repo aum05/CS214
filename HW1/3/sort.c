@@ -38,22 +38,19 @@ char *getString(void){
 }
 
 int main(int argc, char** argv){
-    //char option[] = "-n";
-    int index = 0;
+    int ind = 0;
     int count = 0;
 
     if(argc == 1){
         char **strings = NULL;
         char *str;
-        for(index = 0; (str=getString()); ++index){
-            strings = (char**) realloc (strings, (index+1)*sizeof(*strings));
-            strings[index] = str;
+        for(ind = 0; (str=getString()); ++ind){
+            strings = (char**) realloc (strings, (ind+1)*sizeof(*strings));
+            strings[ind] = str;
         }
-        strsort((const char**)strings, index);
+        strsort((const char**)strings, ind);
 
-        printf("\nSorted:\n");
-
-        for(count = 0; count < index; ++count){
+        for(count = 0; count < ind; ++count){
             printf("%s\n", strings[count]);
             free(strings[count]);
         }
@@ -65,24 +62,17 @@ int main(int argc, char** argv){
         while (!feof(stdin))
         {
             scanf("%d\n", &number);
-            numbers = (int*) realloc (numbers, (index+1)*sizeof(*numbers));
-            numbers[index] = number;
-            ++index;
+            numbers = (int*) realloc (numbers, (ind+1)*sizeof(*numbers));
+            numbers[ind] = number;
+            ++ind;
         }
 
-        intsort(numbers, index);
+        intsort(numbers, ind);
 
-        printf("\nSorted:\n");
-
-        for(count = 0; count < index; ++count){
+        for(count = 0; count < ind; ++count){
             printf("%d\n", numbers[count]);
         }
         free(numbers);
-    }
-    
-
-    else{
-       
     }
     
     return EXIT_SUCCESS;

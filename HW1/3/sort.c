@@ -22,18 +22,19 @@ void intsort(int arr[], int n){
     qsort(arr, n, sizeof(int), intcomp);
 }
 
-char *get_strings(void){
-    char *string = NULL;//or calloc(1,sizeof(char)) for return "" (test by caller: *string == '\0')
-    int ch;
-    size_t len = 0;
+char *getString(void){
+    char *str = NULL;
+    int c;
+    size_t size = 0;
 
-    while(EOF != (ch=fgetc(stdin)) && ch != '\n' ) {
-        string = (char*)realloc(string,  len + 2);//To realloc to each character is inefficient
-        string[len++] = ch;
+    while(EOF != (c=fgetc(stdin)) && c != '\n' ) {
+        //Increase the space by 2 bytes, since one character represents 1 byte.
+        str = (char*)realloc(str,  size + 2);
+        str[size++] = c;
     }
-    if(string)
-        string[len] = '\0';
-    return string;//The value is NULL when there is no input substantial.
+    if(str)
+        str[size] = '\0';
+    return str;//The value is NULL when there is no input substantial.
 }
 
 int main(int argc, char** argv){
@@ -43,10 +44,10 @@ int main(int argc, char** argv){
 
     if(argc == 1){
         char **strings = NULL;
-        char *string;
-        for(index = 0; (string=get_strings()); ++index){
+        char *str;
+        for(index = 0; (str=getString()); ++index){
             strings = (char**) realloc (strings, (index+1)*sizeof(*strings));
-            strings[index] = string;
+            strings[index] = str;
         }
         strsort((const char**)strings, index);
 

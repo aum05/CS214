@@ -32,10 +32,10 @@ struct Node* add(struct Node* head, char *str, int count){
     //Append the head node to the last node
     //Making the head node the last node
     current->next = newNode;
-    return head;
+    return newNode;
 }
 
-void printList(struct Node *head){
+void printUniqStrs(struct Node *head){
   while (head != NULL)
   {
     printf("%d %s\n", head->count, head->str);
@@ -60,6 +60,7 @@ char *getString(void){
 
 int main(int argc, char** argv){
     struct Node* head = NULL;
+    struct Node* curr = NULL;
     int ind = 0;
     int count = 1;
     int str_count = 0;
@@ -75,25 +76,35 @@ int main(int argc, char** argv){
     for(int i = 0; i<ind; ++i){
         if(i == 0){
             head = add(head,strings[i],count);
+            curr = head;
             continue;
         }
         if(strcmp(strings[i], strings[i-1]) == 0){
             ++count;
-            head->count = count;
+            curr->count = count;
         }
         else{
             count = 1;
-            head = add(head,strings[i],count);
+            curr = add(curr,strings[i],count);
         }
     }
 
-    printList(head);
+    printUniqStrs(head);
+
     //Since each string in the strings array has been allocated memory
     //Each string needs to be free individually
     for(str_count = 0; str_count < ind; ++str_count){
         free(strings[str_count]);
     }
     free(strings);
+
+    struct Node *p1 = head, *p2;
+    while(p1){
+        p2 = p1;
+        p1 = p1->next;
+        free(p2->str);
+        free(p2);
+    }
     
     return EXIT_SUCCESS;
 }

@@ -29,7 +29,7 @@ void factorization (int n) {
         printf("%d ", n);
     }
 
-    printf("\b");
+    printf("\b\n");
 }
 
 int main(int argc, char** argv){

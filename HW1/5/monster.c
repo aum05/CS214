@@ -17,6 +17,8 @@ void printBoard(char** grid, int boardX, int boardY){
     }
 }
 char** updateGrid(char** grid, int goalX, int goalY, int boardX, int boardY){
+    int i,j;
+    
     for(j=0; j<boardY; ++j){
         for(i=0; i<boardX; ++i){
             if(i == player.posX && j == player.posY){
@@ -36,8 +38,6 @@ char** updateGrid(char** grid, int goalX, int goalY, int boardX, int boardY){
     }
     return grid;
 }
-
-int moveMonster(char** grid){}
 
 int main(int argc, char** argv){
     //Getting the parameters
@@ -96,25 +96,35 @@ int main(int argc, char** argv){
     move = (char*) malloc (size);
 
     //Playing the game
-    while((player.posX != goalX && player.posY != goalY)
-            || (player.posX == monster.posX && player.posY == monster.posY))
+    while(!(player.posX == goalX && player.posY == goalY) && !(player.posX == monster.posX && player.posY == monster.posY))
             {
                 size_t num_bytes = getline(&move, &size, stdin);
-                if (strcasecmp(move,"N")){
-                    player.posY = player.posY + 1;
-                }
-                else if (strcasecmp(move,"S")){
-                    player.posY = player.posY - 1;
-                }
-                else if (strcasecmp(move,"E")){
-                    player.posX = player.posX + 1;
-                }
-                else if (strcasecmp(move,"W")){
-                    player.posX = player.posX - 1;
-                }
-
+                move[strcspn(move, "\n")] = '\0';
                 
+                if (strcasecmp(move,"N") == 0){
+                    ++player.posY;
+                }
+                else if (strcasecmp(move,"S") == 0){
+                    --player.posY;
+                }
+                else if (strcasecmp(move,"E") == 0){
+                    ++player.posX;
+                }
+                else if (strcasecmp(move,"W") == 0){
+                    --player.posX;
+                }
+                else{
+                    printf("ENTER A MOVE\n");
+                }
+                printf("MOVE: %s\n", move);
+                printf("plrX: %d, plrY: %d\n", player.posX, player.posY);
+
+                grid = updateGrid(grid, goalX, goalY, boardX, boardY);
+                printBoard(grid,boardX,boardY);
             }
+
+    printf("\nFinal\n");
+    printBoard(grid,boardX,boardY);
 
     for (i = 0; i < boardX; i++) {
         free(grid[i]);

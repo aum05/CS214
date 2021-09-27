@@ -54,16 +54,6 @@ void monsterMoves(int goalX, int goalY, int boardX, int boardY){
                         --monster.posY; //Monster moves South
                         printf("monster moves S\n");
                     }
-                    else{ //if vertDist == 0, means monster is in the same row as player
-                        if(horzDist>0 && monster.posX+1<boardX){
-                            ++monster.posX; //Monster moves East
-                            printf("monster moves E\n");
-                        }
-                        else if(monster.posX-1>=0){
-                            --monster.posX; //Monster moves West
-                            printf("monster moves W\n");
-                        }
-                    }
                 }
                 else{
                     if(horzDist>0 && monster.posX+1<boardX){
@@ -73,16 +63,6 @@ void monsterMoves(int goalX, int goalY, int boardX, int boardY){
                     else if (horzDist<0 && monster.posX-1>=0){
                         --monster.posX; //Monster moves West
                         printf("monster moves W\n");
-                    }
-                    else{ //if horzDist == 0, means monster is in the same column as player
-                        if(vertDist>0 && monster.posY+1<boardY){
-                            ++monster.posY; //Monster moves North
-                            printf("monster moves N\n");
-                        }
-                        else if(monster.posY-1>=0){
-                            --monster.posY; //Monster moves South
-                            printf("monster moves S\n");
-                        }
                     }
                 }
                 return;
@@ -159,6 +139,7 @@ int main(int argc, char** argv){
                     }
                     else{
                         printf("ENTER A NEW MOVE\n");
+                        continue;
                     }
                 }
                 else if (strcasecmp(move,"S") == 0){
@@ -167,6 +148,7 @@ int main(int argc, char** argv){
                     }
                     else{
                         printf("ENTER A NEW MOVE\n");
+                        continue;
                     }
                 }
                 else if (strcasecmp(move,"E") == 0){
@@ -175,6 +157,7 @@ int main(int argc, char** argv){
                     }
                     else{
                         printf("ENTER A NEW MOVE\n");
+                        continue;
                     }
                     
                 }
@@ -184,10 +167,12 @@ int main(int argc, char** argv){
                     }
                     else{
                         printf("ENTER A NEW MOVE\n");
+                        continue;
                     }
                 }
                 else{
                     printf("ENTER A VALID MOVE\n");
+                    continue;
                 }
 
                 monsterMoves(goalX,goalY,boardX,boardY);

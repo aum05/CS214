@@ -42,6 +42,7 @@ char** updateGrid(char** grid, int goalX, int goalY, int boardX, int boardY){
 void monsterMoves(int goalX, int goalY, int boardX, int boardY){
     int vertDist = player.posY - monster.posY;
     int horzDist = player.posX - monster.posX;
+
     if(!(player.posX == goalX && player.posY == goalY) 
             && !(player.posX == monster.posX && player.posY == monster.posY))
             {
@@ -95,11 +96,6 @@ int main(int argc, char** argv){
     grid = (char**)malloc(boardX * sizeof(char**));
     for (i = 0; i < boardX; i++) {
         grid[i] = (char*)malloc(boardY * sizeof(char*));
-    }
-    for(i=0; i<boardX; i++){
-        for(j=0; j<boardY; j++){
-            grid[i][j] = (char)malloc(2 * sizeof(char));
-        }
     }
 
     //Initializing the grid

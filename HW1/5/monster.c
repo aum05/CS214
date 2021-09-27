@@ -39,6 +39,57 @@ char** updateGrid(char** grid, int goalX, int goalY, int boardX, int boardY){
     return grid;
 }
 
+void monsterMoves(int goalX, int goalY, int boardX, int boardY){
+    int vertDist = player.posY - monster.posY;
+    int horzDist = player.posX - monster.posX;
+    if(!(player.posX == goalX && player.posY == goalY) 
+            && !(player.posX == monster.posX && player.posY == monster.posY))
+            {
+                if(abs(vertDist)>abs(horzDist) || vertDist == horzDist){
+                    if(vertDist>0 && monster.posY+1<boardY){
+                        ++monster.posY; //Monster moves North
+                        printf("monster moves N\n");
+                    }
+                    else if(vertDist<0 && monster.posY-1>=0){
+                        --monster.posY; //Monster moves South
+                        printf("monster moves S\n");
+                    }
+                    else{ //if vertDist == 0, means monster is in the same row as player
+                        if(horzDist>0 && monster.posX+1<boardX){
+                            ++monster.posX; //Monster moves East
+                            printf("monster moves E\n");
+                        }
+                        else if(monster.posX-1>=0){
+                            --monster.posX; //Monster moves West
+                            printf("monster moves W\n");
+                        }
+                    }
+                }
+                else{
+                    if(horzDist>0 && monster.posX+1<boardX){
+                        ++monster.posX; //Monster moves East
+                        printf("monster moves E\n");
+                    }
+                    else if (horzDist<0 && monster.posX-1>=0){
+                        --monster.posX; //Monster moves West
+                        printf("monster moves W\n");
+                    }
+                    else{ //if horzDist == 0, means monster is in the same column as player
+                        if(vertDist>0 && monster.posY+1<boardY){
+                            ++monster.posY; //Monster moves North
+                            printf("monster moves N\n");
+                        }
+                        else if(monster.posY-1>=0){
+                            --monster.posY; //Monster moves South
+                            printf("monster moves S\n");
+                        }
+                    }
+                }
+                return;
+            }
+    return;
+}
+
 int main(int argc, char** argv){
     //Getting the parameters
     int boardX = atoi(argv[1]);
@@ -96,36 +147,63 @@ int main(int argc, char** argv){
     move = (char*) malloc (size);
 
     //Playing the game
-    while(!(player.posX == goalX && player.posY == goalY) && !(player.posX == monster.posX && player.posY == monster.posY))
+    while(!(player.posX == goalX && player.posY == goalY) 
+            && !(player.posX == monster.posX && player.posY == monster.posY))
             {
                 size_t num_bytes = getline(&move, &size, stdin);
                 move[strcspn(move, "\n")] = '\0';
                 
                 if (strcasecmp(move,"N") == 0){
-                    ++player.posY;
+                    if(player.posY+1<boardY){
+                        ++player.posY;
+                    }
+                    else{
+                        printf("ENTER A NEW MOVE\n");
+                    }
                 }
                 else if (strcasecmp(move,"S") == 0){
-                    --player.posY;
+                    if(player.posY-1>=0){
+                        --player.posY;
+                    }
+                    else{
+                        printf("ENTER A NEW MOVE\n");
+                    }
                 }
                 else if (strcasecmp(move,"E") == 0){
-                    ++player.posX;
+                    if(player.posX+1<boardX){
+                        ++player.posX;
+                    }
+                    else{
+                        printf("ENTER A NEW MOVE\n");
+                    }
+                    
                 }
                 else if (strcasecmp(move,"W") == 0){
-                    --player.posX;
+                    if(player.posX-1>=0){
+                        --player.posX;
+                    }
+                    else{
+                        printf("ENTER A NEW MOVE\n");
+                    }
                 }
                 else{
-                    printf("ENTER A MOVE\n");
+                    printf("ENTER A VALID MOVE\n");
                 }
-                printf("MOVE: %s\n", move);
-                printf("plrX: %d, plrY: %d\n", player.posX, player.posY);
 
-                grid = updateGrid(grid, goalX, goalY, boardX, boardY);
-                printBoard(grid,boardX,boardY);
+                monsterMoves(goalX,goalY,boardX,boardY);
+
+                if(player.posX == goalX && player.posY == goalY){
+                    printf("player wins!\n");
+                }
+                else if(player.posX == monster.posX && player.posY == monster.posY){
+                    printf("monster wins!\n");
+                }
+                else{
+                    grid = updateGrid(grid, goalX, goalY, boardX, boardY);
+                    printBoard(grid,boardX,boardY);
+                }
             }
-
-    printf("\nFinal\n");
-    printBoard(grid,boardX,boardY);
-
+            
     for (i = 0; i < boardX; i++) {
         free(grid[i]);
     }

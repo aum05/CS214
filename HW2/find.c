@@ -2,12 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
-#include <errno.h>
-#include <locale.h>
 
 #define PATH_MAX 1000
 
-static int find(const char *orgDir, const char *str)
+void find(const char *orgDir, const char *str)
 {
 	char path[PATH_MAX + 2];
 	char *i = path;
@@ -22,8 +20,8 @@ static int find(const char *orgDir, const char *str)
 
 	DIR *directory = opendir(orgDir);
 	if (!directory) {
-		printf("Unable to open %s\n", orgDir);
-		return 0;
+		printf("Unable to open directory: %s\n", orgDir);
+		return;
 	}
 
 	// Traverse through the curent and subdirectories to find all filenames matching the pattern
@@ -73,7 +71,7 @@ static int find(const char *orgDir, const char *str)
 	}
 
 	closedir(directory);
-	return 1;
+	return;
 }
 
 int main(int argc, char **argv) {

@@ -80,7 +80,7 @@ int main(int argc, char** argv){
             printf("%s ",grp->gr_name);
 
             // Print the file size
-            printf("%4lld ",stats.st_size);
+            printf("%4ld ",stats.st_size);
             
             // Print the last modification time
             mod_time = ctime(&stats.st_mtime);

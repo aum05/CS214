@@ -3,13 +3,13 @@
 #include <string.h>
 #include <dirent.h>
 
-#define PATH_MAX 1000
+#define MAX_LENGTH 1000
 
-void find(const char *orgDir, const char *str)
-{
-	char path[PATH_MAX + 2];
+void find(const char *orgDir, const char *str){
+	
+	char path[MAX_LENGTH + 2];
 	char *i = path;
-	char *lastChar = &path[PATH_MAX];
+	char *lastChar = &path[MAX_LENGTH];
 
     // Add the original directory name to the path
 	const char *name = orgDir;

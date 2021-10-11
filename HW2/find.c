@@ -10,70 +10,69 @@
 static int find(const char *orgDir, const char *str)
 {
 	char path[PATH_MAX + 2];
-	char *p = path;
-	char *end = &path[PATH_MAX];
+	char *i = path;
+	char *lastChar = &path[PATH_MAX];
 
-	/* Copy directory name to path */
-	const char *src = orgDir;
-	while (p < end && *src != '\0') {
-		*p++ = *src++;
+    // Add the original directory name to the path
+	const char *name = orgDir;
+	while (i < lastChar && *name != '\0') {
+		*i++ = *name++;
 	}
-	*p = '\0';
+	*i = '\0';
 
-	DIR *dir = opendir(orgDir);
-	if (!dir) {
-		fprintf(stderr,
-			"Cannot open %s (%s)\n", orgDir, strerror(errno));
+	DIR *directory = opendir(orgDir);
+	if (!directory) {
+		printf("Unable to open %s\n", orgDir);
 		return 0;
 	}
 
-	/* Print all files and directories within the directory */
-	struct dirent *ent;
-	while ((ent = readdir(dir)) != NULL) {
-		char *q = p;
+	// Traverse through the curent and subdirectories to find all filenames matching the pattern
+	struct dirent *entry;
+	while ((entry = readdir(directory)) != NULL) {
+		char *j = i;
 		char c;
 
-		/* Get final character of directory name */
-		if (path < q)
-			c = q[-1];
+		// Obtain the end character of the path
+		if (path < j)
+			c = j[-1];
 		else
 			c = ':';
 
-		/* Append directory separator if not already there */
-		if (c != ':' && c != '/' && c != '\\')
-			*q++ = '/';
+		// Append the separator to end of the path if applicable
+		if (c != '/' && c != ':' &&  c != '\\')
+			*j++ = '/';
 
-		/* Append file name */
-		src = ent->d_name;
-		while (q < end && *src != '\0') {
-			*q++ = *src++;
+		// Get the filename and append it at the end of the path
+		name = entry->d_name;
+		while (j < lastChar && *name != '\0') {
+			*j++ = *name++;
 		}
-		*q = '\0';
+		*j = '\0';
 
-		/* Decide what to do with the directory entry */
-		switch (ent->d_type) {
+		// Perform apt action depending on whether the entry 
+        // is another subdirectory or a file that matches the pattern
+		switch (entry->d_type) {
             case DT_REG:
-                /* Output file name with directory */
-                if (strstr(ent->d_name,str)){
+                // If it's a filename that matches the pattern, print the whole path of the file
+                if (strstr(entry->d_name,str)){
                     printf("%s\n", path);    			
                 }
                 break;
             case DT_DIR:
-                /* Scan sub-directory recursively */
-                if (strcmp(ent->d_name, ".") != 0
-                    &&  strcmp(ent->d_name, "..") != 0) {
+                // If it's a subdirectory, recursively perform the find function
+                if (strcmp(entry->d_name, ".") != 0 &&  strcmp(entry->d_name, "..") != 0) {
                     find(path,str);
                 }
                 break;
 
             default:
-                /* Ignore device entries */
-                /*NOP*/;
+                // No action to perform in this case
+                ;
 		}
 
 	}
 
-	closedir(dir);
+	closedir(directory);
 	return 1;
 }
 

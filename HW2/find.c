@@ -1,31 +1,3 @@
-/*
- * An example demonstrating recursive directory traversal.
- *
- * Compile this file with Visual Studio and run the produced command in
- * console with a directory name argument.  For example, command
- *
- *     find "C:\Program Files"
- *
- * will output thousands of file names such as
- *
- *     c:\Program Files/7-Zip/7-zip.chm
- *     c:\Program Files/7-Zip/7-zip.dll
- *     c:\Program Files/7-Zip/7z.dll
- *     c:\Program Files/Adobe/Reader 10.0/Reader/logsession.dll
- *     c:\Program Files/Adobe/Reader 10.0/Reader/LogTransport2.exe
- *     c:\Program Files/Windows NT/Accessories/wordpad.exe
- *     c:\Program Files/Windows NT/Accessories/write.wpc
- *
- * The find command provided by this file is only an example: the command does
- * not provide options to restrict the output to certain files as the Linux
- * version does.
- *
- * Copyright (C) 1998-2019 Toni Ronkko
- * This file is part of dirent.  Dirent may be freely distributed
- * under the MIT license.  For all details and documentation, see
- * https://github.com/tronkko/dirent
- */
-#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,36 +6,25 @@
 #include <locale.h>
 
 #define PATH_MAX 1000
-static int find_directory(const char *dirname, const char *str);
 
-
-int main(int argc, char **argv) {
-	find_directory(".", argv[1]);
-
-	return EXIT_SUCCESS;
-}
-
-/* Find files and subdirectories recursively */
-static int find_directory(const char *dirname, const char *str)
+static int find(const char *orgDir, const char *str)
 {
-	char buffer[PATH_MAX + 2];
-	char *p = buffer;
-	char *end = &buffer[PATH_MAX];
+	char path[PATH_MAX + 2];
+	char *p = path;
+	char *end = &path[PATH_MAX];
 
-	/* Copy directory name to buffer */
-	const char *src = dirname;
+	/* Copy directory name to path */
+	const char *src = orgDir;
 	while (p < end && *src != '\0') {
 		*p++ = *src++;
 	}
 	*p = '\0';
 
-	/* Open directory stream */
-	DIR *dir = opendir(dirname);
+	DIR *dir = opendir(orgDir);
 	if (!dir) {
-		/* Could not open directory */
 		fprintf(stderr,
-			"Cannot open %s (%s)\n", dirname, strerror(errno));
-		return /*failure*/ 0;
+			"Cannot open %s (%s)\n", orgDir, strerror(errno));
+		return 0;
 	}
 
 	/* Print all files and directories within the directory */
@@ -73,7 +34,7 @@ static int find_directory(const char *dirname, const char *str)
 		char c;
 
 		/* Get final character of directory name */
-		if (buffer < q)
+		if (path < q)
 			c = q[-1];
 		else
 			c = ':';
@@ -91,28 +52,38 @@ static int find_directory(const char *dirname, const char *str)
 
 		/* Decide what to do with the directory entry */
 		switch (ent->d_type) {
-		case DT_LNK:
-		case DT_REG:
-			/* Output file name with directory */
-            if (strcasestr(ent->d_name,str)){
-                printf("%s\n", buffer);    			
-            }
-            break;
-		case DT_DIR:
-			/* Scan sub-directory recursively */
-			if (strcmp(ent->d_name, ".") != 0
-				&&  strcmp(ent->d_name, "..") != 0) {
-				find_directory(buffer,str);
-			}
-			break;
+            case DT_REG:
+                /* Output file name with directory */
+                if (strstr(ent->d_name,str)){
+                    printf("%s\n", path);    			
+                }
+                break;
+            case DT_DIR:
+                /* Scan sub-directory recursively */
+                if (strcmp(ent->d_name, ".") != 0
+                    &&  strcmp(ent->d_name, "..") != 0) {
+                    find(path,str);
+                }
+                break;
 
-		default:
-			/* Ignore device entries */
-			/*NOP*/;
+            default:
+                /* Ignore device entries */
+                /*NOP*/;
 		}
 
 	}
 
 	closedir(dir);
-	return /*success*/ 1;
+	return 1;
+}
+
+int main(int argc, char **argv) {
+    if (argc==1){
+        perror("ENTER PATTERN");
+        return EXIT_FAILURE;
+    }
+
+	find(".", argv[1]);
+
+	return EXIT_SUCCESS;
 }

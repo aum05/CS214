@@ -9,80 +9,93 @@
 #include <pwd.h>
 #include <grp.h>
 
-// Comparator function for comparing strings
-static int strcompare(const void* x, const void* y){
-    return strcasecmp(*(const char**)x, *(const char**)y);
+int sort_func(const struct dirent ** a, const struct dirent **b) {
+  return(strcasecmp((*(const struct dirent **)a)->d_name,
+                    (*(const struct dirent **)b)->d_name));
 }
 
-// Sort function for strings
-void strsort(const char* arr[], int n){
-    qsort(arr, n, sizeof(const char*), strcompare);
+int filter(const struct dirent *name){
+  return 1;
 }
 
-int main(int argc, char** argv)
-{
-    DIR *dr;
+int main(int argc, char** argv){
     char *mod_time;
     int i;
-    struct dirent *fd;
-    struct stat fileStat;
+    int j = 0;
+    struct dirent **nameList;
+    int n;
+    struct stat stats;
     struct passwd *user_id;
     struct group *grp;
 
-    dr=opendir(".");
-    stat(".",&fileStat);
+    n = scandir(".", &nameList, filter, sort_func);
+
+    stat(".",&stats);
 
     char option[] = "-l";
     
     // If the command is only ls
     if (argc == 1){
-        while((fd=readdir(dr))!=NULL) {
-            if (fd->d_name[0] == '.')
+        while(j<n) {
+            if (nameList[j]->d_name[0] == '.'){
+                free(nameList[j]);
+                ++j;
                 continue;
+            }
 
-            printf("%s\n",fd->d_name);
+            printf("%s\n", nameList[j]->d_name);
+            free(nameList[j]);
+            ++j;
         }
     }
     // If the command is ls -l
     else if (strcmp(argv[1],option) == 0){
-        while((fd=readdir(dr))!=NULL) {
-            if (fd->d_name[0] == '.')
+        while(j<n) {
+            if (nameList[j]->d_name[0] == '.'){
+                free(nameList[j]);
+                ++j;
                 continue;
+            }
+            
             // Print the 10-character permissions string
-            stat(fd->d_name,&fileStat);
-            printf( (S_ISDIR(fileStat.st_mode)) ? "d" : "-");
-            printf( (fileStat.st_mode & S_IRUSR) ? "r" : "-");
-            printf( (fileStat.st_mode & S_IWUSR) ? "w" : "-");
-            printf( (fileStat.st_mode & S_IXUSR) ? "x" : "-");
-            printf( (fileStat.st_mode & S_IRGRP) ? "r" : "-");
-            printf( (fileStat.st_mode & S_IWGRP) ? "w" : "-");
-            printf( (fileStat.st_mode & S_IXGRP) ? "x" : "-");
-            printf( (fileStat.st_mode & S_IROTH) ? "r" : "-");
-            printf( (fileStat.st_mode & S_IWOTH) ? "w" : "-");
-            printf( (fileStat.st_mode & S_IXOTH) ? "x" : "-"); 
+            stat(nameList[j]->d_name,&stats);
+            printf( (S_ISDIR(stats.st_mode)) ? "d" : "-");
+            printf( (stats.st_mode & S_IRUSR) ? "r" : "-");
+            printf( (stats.st_mode & S_IWUSR) ? "w" : "-");
+            printf( (stats.st_mode & S_IXUSR) ? "x" : "-");
+            printf( (stats.st_mode & S_IRGRP) ? "r" : "-");
+            printf( (stats.st_mode & S_IWGRP) ? "w" : "-");
+            printf( (stats.st_mode & S_IXGRP) ? "x" : "-");
+            printf( (stats.st_mode & S_IROTH) ? "r" : "-");
+            printf( (stats.st_mode & S_IWOTH) ? "w" : "-");
+            printf( (stats.st_mode & S_IXOTH) ? "x" : "-"); 
             printf(" ");
 
             // Print the file owner's user name
-            user_id=getpwuid(fileStat.st_uid);
+            user_id=getpwuid(stats.st_uid);
             printf("%s ",user_id->pw_name);
             
             // Print the group name
-            grp=getgrgid(fileStat.st_gid);
+            grp=getgrgid(stats.st_gid);
             printf("%s ",grp->gr_name);
 
             // Print the file size
-            printf("%4lld ",fileStat.st_size);
+            printf("%4lld ",stats.st_size);
             
             // Print the last modification time
-            mod_time = ctime(&fileStat.st_mtime);
-            for(i=4;i<=15;i++)
-            printf("%c",mod_time[i]);
+            mod_time = ctime(&stats.st_mtime);
+            for(i=4;i<=15;i++){
+                printf("%c",mod_time[i]);
+            }
             printf(" ");
             
             // Print the file name
-            printf("%s\n",fd->d_name);
+            printf("%s\n",nameList[j]->d_name);
+
+            free(nameList[j]);
+            ++j;
         }
     }
-    closedir(dr);  
-    return 0;
+    free(nameList);
+    return EXIT_SUCCESS;
 }

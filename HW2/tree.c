@@ -43,7 +43,7 @@ void printdir(char *dir, int indent){
         ++i;
     }
     chdir("..");
-    free(nameList)
+    free(nameList);
 }
 
 int main(int argc, char** argv){

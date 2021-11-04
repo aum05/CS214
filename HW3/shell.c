@@ -4,21 +4,17 @@
 
 // Function to the get the present working directory where the shell program is run
 void get_base_dir() {
-    getcwd(base_dir,  MAX_BUF_LEN - 1); 
-    strcpy(cwd, base_dir);
-}
-
-void set_prompt() {
-    printf("> ");
+    getcwd(opening_dir,  MAX_SIZE - 1); 
+    strcpy(cwd, opening_dir);
 }
 
 // Function that modifies the PWD relative to assumed home directory
-void mod_cwd_rel(char* cwd) {
+void change_cwd(char* cwd) {
     int i, j;
 
-    for(i = 0; cwd[i]==base_dir[i] && cwd[i]!='\0' && base_dir[i] != '\0'; i++);
+    for(i = 0; cwd[i]==opening_dir[i] && cwd[i]!='\0' && opening_dir[i] != '\0'; i++);
 
-    if(base_dir[i] == '\0'){
+    if(opening_dir[i] == '\0'){
         cwd[0] = '~';
         for(j = 1; cwd[i]!='\0'; j++) {
             cwd[j] = cwd[i++];
@@ -27,646 +23,431 @@ void mod_cwd_rel(char* cwd) {
     }
 }
 // Function that handles signals
-void signal_handler(int signum) {
-    if(signum == SIGINT) {
-        signal(SIGINT,SIG_IGN);               /* For ignoring ctrl + c */
-        signal(SIGINT, signal_handler);       /* For re-setting signal handler */
+void sig_handler(int sig) {
+    if(sig == SIGINT) {
+        signal(SIGINT,SIG_IGN);               // Ignores ^C
+        signal(SIGINT, sig_handler);       // Resets the signal handler
     }
-    else if(signum == SIGCHLD) {                  /* For handling signal from child processes */
-        int i, status, die_pid;
-        while((die_pid = waitpid(-1, &status, WNOHANG)) > 0) {  /* Get id of the process which has terminated  */
-            for(i = 0; i < num_jobs; i++){
-                if(table[i].active==0) 
+    else if(sig == SIGCHLD) {                  // Handling SIGCHILD
+        int i, stat, term_pid;
+        while((term_pid = waitpid(-1, &stat, WNOHANG)) > 0) {
+            for(i = 0; i < job_counter; i++){
+                if(job_list[i].active==0) 
                     continue;
-                else if(table[i].pid == die_pid)
+                else if(job_list[i].pid == term_pid)
                     break;
             }
-            if(i != num_jobs) {
-                if(WIFSIGNALED(status)){   /* returns true if the child process was terminated by a signal */
-                    printf("\n[%d] %d terminated with signal %d\n", i, table[i].pid, WTERMSIG(status));
+            if(i != job_counter) {
+                if(WIFSIGNALED(stat)){ 
+                    printf("\n[%d] %d terminated with signal %d\n", i, job_list[i].pid, WTERMSIG(stat));
                 }
-                table[i].active = 0;
+                job_list[i].active = 0;
             }
         }
     }
 }
 
 // Initialize the shell
-void initializer() {
-    shell = STDERR_FILENO;                         /* FD for stderr */
+void init() {
+    shell = STDERR_FILENO;
 
-    num_jobs = 0;
+    job_counter = 0;
 
-    input_cmd_tokens = malloc((sizeof(char)*MAX_BUF_LEN)*MAX_BUF_LEN);
-    output_cmd_tokens = malloc((sizeof(char)*MAX_BUF_LEN)*MAX_BUF_LEN);            /* Initialisations and allocations */
+    in_commands = malloc((sizeof(char)*MAX_SIZE)*MAX_SIZE);
+    out_commands = malloc((sizeof(char)*MAX_SIZE)*MAX_SIZE);
 
-    if(isatty(shell)) {                                             /* test whether a stderr refers to a terminal */
-        while(tcgetpgrp(shell) != (shell_pgid = getpgrp())){        /* if it does, send signal to make process group or executable same as process group of stderr */
-            kill(shell_pgid, SIGTTIN);                              /* SIGTTIN sets terminal input for background processes */
-        }             
-                                                                    
-                                                 
+    if(isatty(shell)) {                                             // Testing the stderr to check it refers to terminal
+        while(tcgetpgrp(shell) != (pgid_shell = getpgrp())){      
+            kill(pgid_shell, SIGTTIN);                              // SIGTTIN allows for terminal input while working with background processes
+        }                                     
     }
+    signal (SIGTTIN, SIG_IGN);                                   // Ignore background processes
 
-    signal (SIGINT, SIG_IGN);                                    /* To ignore Ctrl c */
+    signal (SIGINT, SIG_IGN);                                    // Ignore ^C
 
-    signal (SIGTSTP, SIG_IGN);                                   /* To ignore Ctrl z */
+    signal (SIGTSTP, SIG_IGN);                                   // Ignore ^Z
 
-    signal (SIGQUIT, SIG_IGN);                                   /* To ignore Ctrl \ */
+    signal (SIGQUIT, SIG_IGN);                                   // Ignore ^/
 
-    signal (SIGTTIN, SIG_IGN);                                   /* To ignore background processes */
-    
     signal (SIGTTOU, SIG_IGN);
 
-    my_pid = my_pgid = getpid();                                 /* Set pgid of executable same as pid */
-    setpgid(my_pid, my_pgid);
-    tcsetpgrp(shell, my_pgid);                                   /* Give control of stderr to executable's process group */
+    main_pid = main_pgid = getpid();
+    setpgid(main_pid, main_pgid);
+    tcsetpgrp(shell, main_pgid);                                   // Give the executable's process group the control of stderr
     
     get_base_dir();
-    mod_cwd_rel(cwd);                                 /* modify current working directory relative to assumed home directory */
+    change_cwd(cwd);                                 // Update the cwd relative to the opening directory
 }
 
 /*********************** Parser functions ***********************/
-// The first two functions handle input output redirections in piping
+// The first two functions handle input output redirections
 
 // Function to open input file
-int open_infile() {
-    int f = open(infile, O_RDONLY, S_IRWXU);
-    if (f < 0) {
-        perror(infile);  
+int open_input() {
+    int fp = open(input_file, O_RDONLY, S_IRWXU);
+    if (fp < 0) {
+        perror(input_file);  
     }
-    dup2(f, STDIN_FILENO);
-    close(f);
-    return f;
+    dup2(fp, STDIN_FILENO);
+    close(fp);
+    return fp;
 }
 
 // Function to open output file
-int open_outfile() {
-    int f;
-    if(last == 1) f = open(outfile, O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU);
-    else if(last == 2) f = open(outfile, O_CREAT | O_WRONLY | O_APPEND, S_IRWXU);
-    if(f < 0) {
-            perror(outfile);
+int open_output() {
+    int fp = 0;
+    if(last == 1){
+        fp = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU);
     }
-    dup2(f, STDOUT_FILENO);
-    close(f);
-    return f;
+    else if(last == 2){
+        fp = open(output_file, O_CREAT | O_WRONLY | O_APPEND, S_IRWXU);
+    } 
+    if(fp < 0) {
+        perror(output_file);
+    }
+    dup2(fp, STDOUT_FILENO);
+    close(fp);
+    return fp;
 }
 
-char* read_cmdline() {
-    int len=0,c;            
-    char* cmd = malloc(sizeof(char)*MAX_BUF_LEN);
-    while(1) {
-        c = getchar();
-        if(c == '\n') {
-            cmd[len++] = '\0';
-            break;
-        }
-        else
-            cmd[len++] = c;
+char* read_input() {
+    char *str = NULL;
+    int c;
+    size_t size = 0;
+
+    while(EOF != (c=fgetc(stdin)) && c != '\n' ) {
+        //Increase the space by 2 bytes, since one character represents 1 byte.
+        str = (char*)realloc(str,  size + 2);
+        str[size++] = c;
     }
-    return cmd;
+    if(str)
+        str[size] = '\0';
+    return str;
 }
 
-int parse_cmd_line(char* cmdline, char** cmds) {
+int parse_input(char* cmd_input, char** commands) {
+    int counter = 0;
+    char* cmd = strtok(cmd_input, ";");
+    while(cmd!=NULL) {
+        commands[counter++] = cmd;
+        cmd = strtok(NULL, ";");
+    }
+    return counter;
+}
+
+int parse_commands(char* command, char** cmd_vars) {
     int num_cmds = 0;
-    char* token = strtok(cmdline, ";");
-    while(token!=NULL) {
-        cmds[num_cmds++] = token;
-        token = strtok(NULL, ";");
+    char* cmd = strtok(command, CMD_DELIMS);
+    while(cmd!=NULL) {
+        cmd_vars[num_cmds++] = cmd;
+        cmd = strtok(NULL, CMD_DELIMS);
     }
     return num_cmds;
 }
 
-int parse_cmd(char* cmd, char** cmd_tokens) {
-    int tok = 0;
-    char* token = strtok(cmd, CMD_DELIMS);
-    while(token!=NULL) {
-        cmd_tokens[tok++] = token;
-        token = strtok(NULL, CMD_DELIMS);
-    }
-    return tok;
-}
-
-int check_for_pipe(char* cmd) {
-    int i;
-    idxi = idxo = last = piping = input_redi = output_redi = 0;
-    for( i = 0 ; cmd[i] ; i++) {
-        if(cmd[i] == '|') {
-            piping = 1;
-        }
-        if(cmd[i] == '<') {
-            input_redi = 1;
-            if(idxi == 0 ) idxi = i;
-        }
-        if(cmd[i] == '>') {
-            output_redi = 1;
-            if(last == 0) last = 1;
-            if(idxo == 0 ) idxo = i;
-        }
-        if(cmd[i] == '>' && cmd[i+1] == '>') last = 2;
-    }
-    if(piping) return 1;
-    else return -1;
-}
-
-void parse_for_piping(char* cmd) {
-    char* copy = strdup(cmd);
-    char* token;
-    int tok = 0;
-    token = strtok(copy, "|");
-    while(token!= NULL) {
-        pipe_cmds[tok++] = token;
-        token = strtok(NULL, "|");
-    }
-    num_pipe = tok;
-}
-
-int parse_for_redi(char* cmd, char** cmd_tokens) {
-    char* copy = strdup(cmd);
-    idxi = idxo = last = input_redi = output_redi = 0;
-    infile = outfile = NULL;
-    int i, tok = 0;
-    for( i = 0 ; cmd[i] ; i++) {
-        if(cmd[i] == '<') {
-                input_redi = 1;
-                if(idxi == 0 ) idxi = i;
-        }
-        if(cmd[i] == '>') {
-                output_redi = 1;
-                if(last == 0) last = 1;
-                if(idxo == 0 ) idxo = i;
-        }
-        if(cmd[i] == '>' && cmd[i+1] == '>') last = 2;
-    }
-    if(input_redi == 1 && output_redi == 1) {
-        char* token;
-        token = strtok(copy, " <>\t\n");
-        while(token!=NULL) {
-                cmd_tokens[tok++] = strdup(token);
-                token = strtok(NULL, "<> \t\n");
-        }
-        if(idxi < idxo ) {
-                infile = strdup(cmd_tokens[tok - 2]);
-                outfile = strdup(cmd_tokens[tok - 1]);
-        }
-        else {
-                infile = strdup(cmd_tokens[tok - 1]);
-                outfile = strdup(cmd_tokens[tok - 2]);
-        }
-        cmd_tokens[tok - 2] = cmd_tokens[tok - 1] = NULL;
-        
-        return tok - 2;
-    }
-            
-    if(input_redi == 1) {
-        char* token;
-        char* copy = strdup(cmd);
-
-        char** input_redi_cmd = malloc((sizeof(char)*MAX_BUF_LEN)*MAX_BUF_LEN);
-        token = strtok(copy, "<");
-        while(token!=NULL) {
-        input_redi_cmd[tok++] = token;
-        token = strtok(NULL, "<");
-        }
-        copy = strdup(input_redi_cmd[tok - 1]);
-
-        token = strtok(copy, "> |\t\n");
-        infile = strdup(token);
-
-        tok = 0;
-        token = strtok(input_redi_cmd[0], CMD_DELIMS);
-        while(token!=NULL) {
-        cmd_tokens[tok++] = strdup(token);
-        token = strtok(NULL, CMD_DELIMS);
-        }
-
-        cmd_tokens[tok] = NULL;
-
-        free(input_redi_cmd);    
-    }
-
-    if(output_redi == 1) {
-        char* copy = strdup(cmd);
-        char* token;
-        char** output_redi_cmd = malloc((sizeof(char)*MAX_BUF_LEN)*MAX_BUF_LEN);
-        if(last == 1)
-                token = strtok(copy, ">");
-        else if(last == 2)
-                token = strtok(copy, ">>");
-        while(token!=NULL) {
-                output_redi_cmd[tok++] = token;
-                if(last == 1) token = strtok(NULL, ">");
-                else if(last == 2) token = strtok(NULL, ">>");
-        }
-
-        copy = strdup(output_redi_cmd[tok - 1]);
-        token = strtok(copy, "< |\t\n");
-        outfile = strdup(token);
-
-        tok = 0;
-        token = strtok(output_redi_cmd[0], CMD_DELIMS);
-        while(token!=NULL) {
-                cmd_tokens[tok++] = token;
-                token = strtok(NULL, CMD_DELIMS);
-        }
-
-        free(output_redi_cmd);    
-    }
-    if(input_redi == 0 && output_redi == 0 ) return parse_cmd(strdup(cmd), cmd_tokens);
-    else return tok;
-}
-
 /*********************** Implentation of Built-in Commands ***********************/
 
-int cd_cmd(char** cmd_tokens, char* cwd, char* base_dir) {
-    if(cmd_tokens[1] == NULL || strcmp(cmd_tokens[1], "~\0") == 0 || strcmp(cmd_tokens[1], "~/\0") == 0) {
+int cd_func(char** cmd_vars, char* cwd) {
+    if(cmd_vars[1] == NULL || strcmp(cmd_vars[1], "~\0") == 0 || strcmp(cmd_vars[1], "~/\0") == 0) {
         chdir(getenv("HOME")); 
         strcpy(cwd, getenv("HOME"));
-        mod_cwd_rel(cwd);
+        change_cwd(cwd);
     }
-    else if(chdir(cmd_tokens[1]) == 0) {
-        getcwd(cwd, MAX_BUF_LEN);
-        mod_cwd_rel(cwd);
+    else if(chdir(cmd_vars[1]) == 0) {
+        getcwd(cwd, MAX_SIZE);
+        change_cwd(cwd);
         return 0;
     }
     else {
-        perror("Error executing cd command");
+        perror("Error changing directory");
     }
 }
 
-void echo(char** cmd_tokens, int tokens, char* cmd) {
-    if(tokens > 1 && cmd_tokens[1][0] == '-') {
-        run_cmd(cmd_tokens, cmd);
-        return;
-    }
-    int i, len = 0, in_quote = 0, flag = 0;
-    char buf[MAX_BUF_LEN] = "\0";
-    for(i = 0; isspace(cmd[i]); i++);
-    if(i == 0) i = 5;
-    else i += 4;
-    for(; cmd[i] != '\0' ; i++) {
-        if(cmd[i] == '"') {
-            in_quote = 1 - in_quote;
-        }    
-        else if(in_quote == 0 && (isspace(cmd[i])) && flag == 0) {
-            flag = 1;
-            if(len > 0) buf[len++] = ' ';
-        }
-        else if(in_quote == 1 || !isspace(cmd[i])) buf[len++] = cmd[i];
-        if(!isspace(cmd[i]) && flag == 1) flag = 0;
-    }
-    if(in_quote == 1) {
-        fprintf(stderr, "Missing quotes\n");
-        return;
-    }
-    else printf("%s\n", buf);
-}
-
-void pwd(char** cmd_tokens, char* cmd) {
-    char pwd_dir[MAX_BUF_LEN];
-    getcwd(pwd_dir, MAX_BUF_LEN - 1); 
-    if(cmd_tokens[1] == NULL) printf("%s\n", pwd_dir);
-    else run_cmd(cmd_tokens, cmd);
+void pwd(char** cmd_vars, char* command) {
+    char curr_dir[MAX_SIZE];
+    getcwd(curr_dir, MAX_SIZE - 1); 
+    if(cmd_vars[1] == NULL) printf("%s\n", curr_dir);
+    else run(cmd_vars, command);
 }
 
 void jobs() {
     int i;
-    for(i = 0; i < num_jobs ; i++) {
-        if(table[i].active == 1) {
-            if(table[i].bg == 1){
-                strtok(table[i].cmd,"&");
-                printf("[%d] %d %s %s &\n", i, table[i].pid, table[i].stat, table[i].cmd);
+    for(i = 0; i < job_counter ; i++) {
+        if(job_list[i].active == 1) {
+            if(job_list[i].bg == 1){
+                strtok(job_list[i].command,"&");
+                printf("[%d] %d %s %s &\n", i, job_list[i].pid, job_list[i].stat, job_list[i].command);
             }
             else{
-                printf("[%d] %d %s %s\n", i, table[i].pid, table[i].stat, table[i].cmd);
+                printf("[%d] %d %s %s\n", i, job_list[i].pid, job_list[i].stat, job_list[i].command);
             }    
         }
     }
 }
 
-void kjob(int tokens, char** cmd_tokens) {
-    if(tokens != 2 || !strstr(cmd_tokens[1],"%")) {
+void kill_func(int num_cmnds, char** cmd_vars) {
+    if(num_cmnds != 2 || !strstr(cmd_vars[1],"%")) {
         fprintf(stderr, "Invalid usage of kill\n");
         return;
     }
 
-    int job_num = atoi(cmd_tokens[1]);
-    if(table[job_num].active == 1) {
-        if(kill(table[job_num].pid, SIGTERM) < 0)                 /* For sending signal mentioned to job mentioned */
+    int job_num = atoi(&cmd_vars[1][1]);
+    if(job_list[job_num].active == 1) {
+        if(kill(job_list[job_num].pid, SIGTERM) < 0)
             fprintf(stderr, "Signal not sent!\n");
     }
     else fprintf(stderr, "Job not found\n");               
 }
 
-void bg (int tokens, char** cmd_tokens){
-    if(tokens != 2 || !strstr(cmd_tokens[1],"%")) {
+void bg (int num_cmnds, char** cmd_vars){
+    if(num_cmnds != 2 || !strstr(cmd_vars[1],"%")) {
         fprintf(stderr, "Invalid usage of bg\n");
         return;
     }
 
-    int job_num = atoi(cmd_tokens[1]);
-    if(table[job_num].active == 0) {
-        printf("No such job exists\n");
+    int job_num = atoi(&cmd_vars[1][1]);
+    if(job_list[job_num].active == 0) {
+        printf("Job does not exists\n");
         return;
     }
 
-    if(table[job_num].active == 1 && strcmp(table[job_num].stat, "Stopped") == 0) {
-        int pid = table[job_num].pid, pgid;
-        pgid = getpgid(pid);                     /* get pgid of mentioned job */
-        if(killpg(pgid, SIGCONT) < 0)            /* Send signal to thid pgid to continue if stopped */
-            perror("Can't get in background!\n");
-        table[job_num].bg = 1;                   /* Change from background process to foreground process */
-        strcpy(table[job_num].stat,"Running");
-        tcsetpgrp(shell, my_pid);                /* Give control of terminal back to the executable */
+    if(job_list[job_num].active == 1 && strcmp(job_list[job_num].stat, "Stopped") == 0) {
+        int pid = job_list[job_num].pid, pgid;
+        // Obtain the pgid of the suspended jop
+        pgid = getpgid(pid);  
+        // Send SIGCONT signal to this pgid to resume the process
+        if(killpg(pgid, SIGCONT) < 0)
+            perror("Can't run in background!\n");
+        // Set the background process variable
+        job_list[job_num].bg = 1;
+        strcpy(job_list[job_num].stat,"Running");
+        // Transfer control of terminal back to the shell
+        tcsetpgrp(shell, main_pid);
     }
     else fprintf(stderr, "No job found\n");
 }
 
-void fg(int tokens, char** cmd_tokens) {
-    if(tokens != 2 || !strstr(cmd_tokens[1],"%")) {
+void fg(int num_cmnds, char** cmd_vars) {
+    if(num_cmnds != 2 || !strstr(cmd_vars[1],"%")) {
         fprintf(stderr, "Invalid usage of fg\n");
         return;
     }
 
-    int job_num = atoi(cmd_tokens[1]), status;
-    if(table[job_num].active == 0) {
+    int job_num = atoi(&cmd_vars[1][1]), stat;
+    if(job_list[job_num].active == 0) {
         printf("No such job exists\n");
         return;
     }
-    if(table[job_num].active == 1) {
-        int pid = table[job_num].pid, pgid;
-        pgid = getpgid(pid);                     /* get pgid of mentioned job */
-        tcsetpgrp(shell, pgid);                  /* Give control of shell's terminal to this process */
-        fgpid = pgid;                            /* Set this pgid as fg pgid */
-        if(killpg(pgid, SIGCONT) < 0)            /* Send signal to thid pgid to continue if stopped */
+    if(job_list[job_num].active == 1) {
+        int pid = job_list[job_num].pid, pgid;
+        // Obtain the pgid of the background/suspended jop
+        pgid = getpgid(pid);
+        // Transfer shell's control to the job
+        tcsetpgrp(shell, pgid);
+        pid_fg = pgid;
+
+        // Send SIGCONT signal to this pgid to resume the process
+        if(killpg(pgid, SIGCONT) < 0)
             perror("Can't get in foreground!\n");
-        table[job_num].bg = 0;                   /* Change from background process to foreground process */
-        waitpid(pid, &status, WUNTRACED);        /* Wait for this process, return even if it has stopped without trace */
-        if(!WIFSTOPPED(status)) {                /* returns true if the child process was stopped by delivery of a signal */
-            table[job_num].active = 0;
-            fgpid = 0;
+        
+        // Change from background process to foreground process
+        job_list[job_num].bg = 0;
+        waitpid(pid, &stat, WUNTRACED);
+
+        // True when the child process was stopped because of a signal
+        if(!WIFSTOPPED(stat)){
+            job_list[job_num].active = 0;
+            pid_fg = 0;
         }
         else{
             printf("\n");
-            strcpy(table[job_num].stat,"Stopped");
+            strcpy(job_list[job_num].stat,"Stopped");
         }
-        tcsetpgrp(shell, my_pid);                /* Give control of terminal back to the executable */
+        // Transfer control of terminal back to the shell
+        tcsetpgrp(shell, main_pid);
     }
     else fprintf(stderr, "No job found\n");
 }
 
 /*********************** Functions for running the commands ***********************/
 
-void add_proc(int pid, char* name, char* cmd) {
-    table[num_jobs].pid = pid;
-    table[num_jobs].name = strdup(name);
-    table[num_jobs].cmd = strdup(cmd);
-    table[num_jobs].active = 1;
-    strcpy(table[num_jobs].stat, "Running");
-    num_jobs++;
+void start_proc(int pid, char* name, char* command) {
+    job_list[job_counter].pid = pid;
+    job_list[job_counter].name = strdup(name);
+    job_list[job_counter].command = strdup(command);
+    job_list[job_counter].active = 1;
+    strcpy(job_list[job_counter].stat, "Running");
+    job_counter++;
 }
 
-void rem_proc(int pid) {
+void delete_proc(int pid) {
     int i;
-    for(i = 0 ; i < num_jobs; i++) {
-        if(table[i].pid == pid) {
-            table[i].active = 0;
+    for(i = 0 ; i < job_counter; i++) {
+        if(job_list[i].pid == pid) {
+            job_list[i].active = 0;
             break;
         }
     }
 }
 
-int run_cmd(char** cmd_tokens, char* cmd) {
+int run(char** cmd_vars, char* command) {
     pid_t pid;
     pid = fork();
     if(pid < 0) {
-        perror("Child Proc. not created\n");
+        perror("Failure creating a Child Process\n");
         return -1; 
     }
     else if(pid==0) { 
-        int fin, fout;
-        setpgid(pid, pid);                               /* Assign pgid of process equal to its pid */
+        int file_in, file_out;
+        setpgid(pid, pid);
         
-        if(input_redi) {
-            fin = open_infile();
-            if(fin == -1){
+        if(redirect_input) {
+            file_in = open_input();
+            if(file_in == -1){
                 _exit(-1);
             }
         }
-        if(output_redi) {
-            fout = open_outfile();
-            if(fout == -1){
+        if(redirect_output) {
+            file_out = open_output();
+            if(file_out == -1){
                 _exit(-1);
             }
         }
 
-        if(is_bg == 0) tcsetpgrp(shell, getpid());        /* Assign terminal to this process if it is not background */
+        // Transfer control of terminal to this process if it is in the foreground
+        if(if_bg == 0){
+            tcsetpgrp(shell, getpid());
+        }
 
-        signal (SIGINT, SIG_DFL);                         /* Restore default signals in child process */
-        signal (SIGQUIT, SIG_DFL);
+        // Restore default signals in child process
+        signal (SIGINT, SIG_DFL);                      
         signal (SIGTSTP, SIG_DFL);
+        signal (SIGCHLD, SIG_DFL);
         signal (SIGTTIN, SIG_DFL);
         signal (SIGTTOU, SIG_DFL);
-        signal (SIGCHLD, SIG_DFL);
+        signal (SIGQUIT, SIG_DFL); 
         
-        int ret;
-        if((ret = execvp(cmd_tokens[0], cmd_tokens)) < 0) {
-            perror(cmd_tokens[0]);
+        int val;
+        if((val = execvp(cmd_vars[0], cmd_vars)) < 0) {
+            perror(cmd_vars[0]);
             _exit(-1);
         }
         _exit(0);
     }
-    if(is_bg == 0) {
-        tcsetpgrp(shell, pid);                              /* Make sure the parent also gives control to child */
-        add_proc(pid, cmd_tokens[0], cmd);
-        table[num_jobs].bg = 0;
-        int status;
-        fgpid = pid;
-        waitpid(pid, &status, WUNTRACED);               /* Wait for this process, return even if it has stopped without trace */
+    if(if_bg == 0) {
+        // Transfer control from parent to child
+        tcsetpgrp(shell, pid);
+        start_proc(pid, cmd_vars[0], command);
+        job_list[job_counter].bg = 0;
+        int stat;
+        pid_fg = pid;
+        waitpid(pid, &stat, WUNTRACED);
         
-        if(!WIFSTOPPED(status)) rem_proc(pid);         /* returns true if the child process was stopped by delivery of a signal */
- 
+        // Check if the child was stopped by a signal
+        if(!WIFSTOPPED(stat)){
+            delete_proc(pid);
+        }
         else{
             printf("\n");
-            strcpy(table[num_jobs-1].stat,"Stopped");
+            strcpy(job_list[job_counter-1].stat,"Stopped");
         }
-        tcsetpgrp(shell, my_pgid);                     /* Give control of terminal back to the executable */
+        // Transfer control of terminal back to the shell
+        tcsetpgrp(shell, main_pgid);
     }
     else {
-        table[num_jobs].bg = 1;
-        printf("\[%d] %d\n", num_jobs, pid);
-        add_proc(pid, cmd_tokens[0], cmd);
+        job_list[job_counter].bg = 1;
+        printf("[%d] %d\n", job_counter, pid);
+        start_proc(pid, cmd_vars[0], command);
         return 0;
     }
 }
 
-void normal_cmd(int tokens, char** cmd_tokens, char* cmd_copy) {
-    char* ampersand = &cmd_tokens[tokens-1][strlen(cmd_tokens[tokens-1])-1];
-    if(tokens > 0){
-        if(strcmp(cmd_tokens[0], "fg\0") == 0 ){
-            fg(tokens, cmd_tokens);
+void cmd_executer(int num_cmnds, char** cmd_vars, char* copy_command) {
+    char* ampersand = &cmd_vars[num_cmnds-1][strlen(cmd_vars[num_cmnds-1])-1];
+    if(num_cmnds > 0){
+        if(strcmp(cmd_vars[0], "fg\0") == 0 ){
+            fg(num_cmnds, cmd_vars);
         }
-        else if(strcmp(cmd_tokens[0], "bg\0") == 0 ){
-            bg(tokens, cmd_tokens);
+        else if(strcmp(cmd_vars[0], "bg\0") == 0 ){
+            bg(num_cmnds, cmd_vars);
         }
-        else if(strcmp(cmd_tokens[0], "jobs\0") == 0){
+        else if(strcmp(cmd_vars[0], "cd\0") == 0){
+            cd_func(cmd_vars, cwd);
+        }
+        else if(strcmp(cmd_vars[0], "jobs\0") == 0){
             jobs();
         }
-        else if(strcmp(cmd_tokens[0], "kill\0") == 0){
-            kjob(tokens, cmd_tokens);
+        else if(strcmp(cmd_vars[0], "kill\0") == 0){
+            kill_func(num_cmnds, cmd_vars);
         }
         else if(strcmp(ampersand, "&") == 0){
-            if(strcmp(cmd_tokens[tokens-1], "&\0") == 0){
-                cmd_tokens[tokens-1] = NULL;
+            if(strcmp(cmd_vars[num_cmnds-1], "&\0") == 0){
+                cmd_vars[num_cmnds-1] = NULL;
             }
             else{
-                strtok(cmd_tokens[tokens-1], "&");
+                strtok(cmd_vars[num_cmnds-1], "&");
             }
-            is_bg = 1;
-            run_cmd(cmd_tokens, cmd_copy);        // for running background process
+            if_bg = 1;
+            run(cmd_vars, copy_command);
         }
-        else if(strcmp(cmd_tokens[0], "cd\0") == 0){
-            cd_cmd(cmd_tokens, cwd, base_dir);
+        else if(strcmp(cmd_vars[0], "pwd\0") == 0){
+            pwd(cmd_vars, copy_command);
         }
-        else if(strcmp(cmd_tokens[0], "pwd\0") == 0){
-            pwd(cmd_tokens, cmd_copy);
-        }
-        else if(strcmp(cmd_tokens[0], "exit\0") == 0){
+        else if(strcmp(cmd_vars[0], "exit\0") == 0){
             _exit(0);
         }
-        else if(strcmp(cmd_tokens[0], "echo\0") == 0){
-            echo(cmd_tokens, tokens, cmd_copy);
-        }
-        else if(isalpha(cmd_tokens[0][0]) || strstr(cmd_tokens[0], "./") || strcmp(&cmd_tokens[0][0], "/")){
-            run_cmd(cmd_tokens, cmd_copy);
+        else if(isalpha(cmd_vars[0][0]) || strstr(cmd_vars[0], "./") || strcmp(&cmd_vars[0][0], "/")){
+            run(cmd_vars, copy_command);
         }
     }
-    free(cmd_tokens);
-}
-
-void redi_and_pipi_cmd(char* cmd) {
-    int pid, pgid, fin, fout;
-
-    num_pipe = 0;
-
-    parse_for_piping(cmd);
-
-    int* pipes = (int* )malloc(sizeof(int)*(2*(num_pipe - 1)));
-
-    int i;
-
-    for(i = 0; i < 2*num_pipe - 3; i += 2) {
-        if(pipe(pipes + i) < 0 ) {             /* Create required number of pipes, each a combination of input and output fds */
-            perror("Pipe not opened!\n");
-            return;
-        }
-    }
-    int status,j;
-    for(i = 0; i < num_pipe ; i++) {
-        char** cmd_tokens = malloc((sizeof(char)*MAX_BUF_LEN)*MAX_BUF_LEN); /* array of command tokens */
-        int tokens = parse_for_redi(strdup(pipe_cmds[i]), cmd_tokens);
-        is_bg = 0;               
-        pid = fork();
-        if(i < num_pipe - 1)
-            add_proc(pid, cmd_tokens[0], cmd);
-        
-        if(pid != 0 ) {
-            if(i == 0 ) pgid = pid;
-            setpgid(pid, pgid);                         /* Assign pgid of process equal to pgid of first pipe command pid */
-        }
-        if(pid < 0) {
-            perror("Fork Error!\n");
-        }
-        else if(pid == 0) {
-            signal (SIGINT, SIG_DFL);                              /* Restore default signals in child process */
-            signal (SIGQUIT, SIG_DFL);
-            signal (SIGTSTP, SIG_DFL);
-            signal (SIGTTIN, SIG_DFL);
-            signal (SIGTTOU, SIG_DFL);
-            signal (SIGCHLD, SIG_DFL);
-
-            if(output_redi) fout = open_outfile();
-            else if(i < num_pipe - 1) dup2(pipes[2*i + 1], 1);
-
-            if(input_redi) fin = open_infile();
-            else if(i > 0 ) dup2(pipes[2*i -2], 0);
-     
-            int j;
-            for(j = 0; j < 2*num_pipe - 2; j++) close(pipes[j]);
-
-            if(execvp(cmd_tokens[0], cmd_tokens) < 0 ) {
-                    perror("Execvp error!\n");
-                    _exit(-1);
-            }
-        }
-    }
-
-    for(i = 0; i < 2*num_pipe - 2; i++) close(pipes[i]);
-
-    if(is_bg == 0) {
-        tcsetpgrp(shell, pgid);                  /* Assign terminal to pg of the pipe commands */
-
-        for(i = 0; i < num_pipe ; i++) {
-            int cpid = waitpid(-pgid, &status, WUNTRACED);
-            
-            /* Wait for this process, return even if it has stopped without trace */
-
-            if(!WIFSTOPPED(status)) rem_proc(cpid);
-
-            else{
-                printf("\n");
-                strcpy(table[num_jobs-1].stat,"Stopped");
-            }
-        }
-
-        tcsetpgrp(shell, my_pgid);            /* Give control of terminal back to the executable */
-    }
+    free(cmd_vars);
 }
 
 /*********************** Main function for running the Shell ***********************/
 
-int main(){
+int main(int argc, char** argv){
     //Basic Setup
-    initializer();
+    init();
 
     //Command Loop
-    while(1) {
-        if(signal(SIGCHLD,signal_handler)==SIG_ERR)
-            perror("can't catch SIGCHLD");
-        if(signal(SIGINT,signal_handler)==SIG_ERR)
-            perror("can't catch SIGINT!");
+    while(!feof(stdin)) {
+        if(signal(SIGCHLD,sig_handler)==SIG_ERR)
+            perror("Error catching SIGCHLD");
+        if(signal(SIGINT,sig_handler)==SIG_ERR)
+            perror("Error catching SIGINT");
 
-        set_prompt();
+        printf("> ");
 
         int i,j;
 
-        char** cmds = malloc((sizeof(char)*MAX_BUF_LEN)*MAX_BUF_LEN); // array of semi-colon separated commands
+        //Commands seperated by semi-colon
+        char** commands = malloc((sizeof(char)*MAX_SIZE)*MAX_SIZE);
 
-        for(j = 0; j < MAX_BUF_LEN; j++) cmds[j] = '\0';
+        for(j = 0; j < MAX_SIZE; j++) commands[j] = '\0';
 
-        char* cmdline = read_cmdline(); // read command line
-        int num_cmds = parse_cmd_line(cmdline, cmds); // parse command line
+        // Stores the command line input
+        char* cmd_input = read_input();
+        // Stores number of commands
+        int num_cmds = parse_input(cmd_input, commands);
 
         for(i = 0; i < num_cmds; i++) {
-            infile = outfile = NULL;
-            is_bg = 0, num_pipe = 0;
-            char* cmd_copy = strdup(cmds[i]);
+            input_file = output_file = NULL;
+            if_bg = 0;
+            char* copy_command = strdup(commands[i]);
 
-            char** cmd_tokens = malloc((sizeof(char)*MAX_BUF_LEN)*MAX_BUF_LEN); // array of command tokens
-            for(j = 0; j < MAX_BUF_LEN; j++) cmd_tokens[j] = '\0';
-
-            if(check_for_pipe(strdup(cmds[i])) == -1) {
-                    if(input_redi == 1 || output_redi == 1) normal_cmd(parse_for_redi(strdup(cmd_copy), cmd_tokens), cmd_tokens, cmd_copy);
-                    else {
-                            int tokens = parse_cmd(strdup(cmds[i]), cmd_tokens);
-                            normal_cmd(tokens, cmd_tokens, cmd_copy);
-                    }
-            }
-            else redi_and_pipi_cmd(cmds[i]);
+            // Array containing command variables
+            char** cmd_vars = malloc((sizeof(char)*MAX_SIZE)*MAX_SIZE);
+            for(j = 0; j < MAX_SIZE; j++) cmd_vars[j] = '\0';
+            
+            int num_cmnds = parse_commands(strdup(commands[i]), cmd_vars);
+            cmd_executer(num_cmnds, cmd_vars, copy_command);
         }
-        if(cmds) free(cmds);
-        if(cmdline) free(cmdline);
+        if(commands){
+            free(commands);
+        }
+        if(cmd_input){
+            free(cmd_input);
+        }
     }
     return 0;
 }

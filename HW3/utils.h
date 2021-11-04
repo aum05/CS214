@@ -10,78 +10,64 @@
 #include<sys/stat.h>
 #include<sys/types.h>
 #include<ctype.h>
-#define MAX_BUF_LEN 1024
+#define MAX_SIZE 1024
 #define CMD_DELIMS " \t\n"
 #define FNAME_LEN 20
 
 /**********************************Function Declarations************************************/
 
-void check_bg_finish();
-void add_proc(int pid, char* name, char* cmd);
-void rem_proc(int pid);
-char* read_cmdline();
-int parse_cmd_line(char* cmd, char** cmds);
-int parse_cmd(char* cmd, char** cmd_tokens);
-void set_prompt();
+void start_proc(int pid, char* name, char* command);
+void delete_proc(int pid);
+char* read_input();
+int parse_input(char* command, char** cmds);
+int parse_commands(char* command, char** cmd_vars);
 void get_base_dir();
-int run_cmd(char** cmd_tokens, char* cmd);
-void mod_cwd_rel(char* cwd);
-int cd_cmd(char** cmd_tokens, char* cwd, char* base_dir);
-int run_bg_cmd(char** cmd_tokens, int tokens);
-void echo(char** cmd_tokens, int tokens, char* cmd);
-void pwd(char** cmd_tokens, char* cmd);
-void get_prompt_vars();
-int open_infile();
-int open_outfile();
-void normal_cmd(int tokens, char** cmd_tokens, char* copy);
-int check_for_pipe(char* cmd);
-void redi_and_pipi_cmd(char* cmd);
-void kjob(int tokens, char** cmd_tokens);
-void initializer();
-void signal_handler(int signum);
-void fg(int tokens, char** cmd_tokens);
-void normal_cmd(int tokens, char** cmd_tokens, char* cmd_copy);
-int parse_for_redi(char* cmd, char** cmd_tokens);
+int run(char** cmd_vars, char* command);
+void change_cwd(char* cwd);
+int cd_func(char** cmd_vars, char* cwd);
+void pwd(char** cmd_vars, char* command);
+int open_input();
+int open_output();
+void kill_func(int num_cmnds, char** cmd_vars);
+void init();
+void sig_handler(int sig);
+void fg(int num_cmnds, char** cmd_vars);
+void bg(int num_cmnds, char** cmd_vars);
+void cmd_executer(int num_cmnds, char** cmd_vars, char* cmd_copy);
 void jobs();
-void parse_for_piping(char* cmd);
 
 /*******************************Variable And Struct Declarations******************************/
 
-struct proc_fields {
+struct proc_info {
         int pid, pgid;
         char* name;
-        char* cmd;
+        char* command;
         int bg;
         int active;
         char stat[10];
 };
 
-typedef struct proc_fields proc_fields;
+typedef struct proc_info proc_info;
 
-int num_jobs;
+int job_counter;
 
-proc_fields table[MAX_BUF_LEN];
+proc_info job_list[MAX_SIZE];
 
-char user[MAX_BUF_LEN];
-char hostname[MAX_BUF_LEN];
-char base_dir[MAX_BUF_LEN];
-char* pipe_cmds[MAX_BUF_LEN];
-char cwd[MAX_BUF_LEN]; /* current working directory */
+char opening_dir[MAX_SIZE];
+char cwd[MAX_SIZE]; /* current working directory */
 
-char* infile;
-char* outfile;
+char* input_file;
+char* output_file;
 
-int shell, shell_pgid;
+int shell, pgid_shell;
 
-int last, num_pipe;
+int last;
 
-int piping, input_redi, output_redi;
+int redirect_input, redirect_output;
 
-char** input_cmd_tokens;
-char** output_cmd_tokens;
-char** input_redi_cmd;
-char** output_redi_cmd;
+char** in_commands;
+char** out_commands;
 
-pid_t my_pid, my_pgid, fgpid;
+pid_t main_pid, main_pgid, pid_fg;
 
-int is_bg, idxi, idxo;
+int if_bg;

@@ -17,7 +17,7 @@
 /**********************************Function Declarations************************************/
 
 void check_bg_finish();
-void add_proc(int pid, char* name);
+void add_proc(int pid, char* name, char* cmd);
 void rem_proc(int pid);
 char* read_cmdline();
 int parse_cmd_line(char* cmd, char** cmds);

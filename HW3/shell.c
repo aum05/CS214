@@ -42,8 +42,9 @@ void signal_handler(int signum) {
                     break;
             }
             if(i != num_jobs) {
-                if(WIFSIGNALED(status))   /* returns true if the child process was terminated by a signal */
-                    fprintf(stdout, "\n%s with pid %d has exited with signal\n", table[i].name, table[i].pid);
+                if(WIFSIGNALED(status)){   /* returns true if the child process was terminated by a signal */
+                    printf("\n[%d] %d terminated with signal %d\n", i, table[i].pid, WTERMSIG(status));
+                }
                 table[i].active = 0;
             }
         }
@@ -334,39 +335,61 @@ void jobs() {
     for(i = 0; i < num_jobs ; i++) {
         if(table[i].active == 1) {
             if(table[i].bg == 1){
-                printf("[%d] %d %s %s &\n", i, table[i].pid, table[i].stat, table[i].name);
+                strtok(table[i].cmd,"&");
+                printf("[%d] %d %s %s &\n", i, table[i].pid, table[i].stat, table[i].cmd);
             }
             else{
-                printf("[%d] %d %s %s\n", i, table[i].pid, table[i].stat, table[i].name);
+                printf("[%d] %d %s %s\n", i, table[i].pid, table[i].stat, table[i].cmd);
             }    
         }
     }
 }
 
 void kjob(int tokens, char** cmd_tokens) {
-    if(tokens != 2) {
-        fprintf(stderr, "Invalid usage of kjob!\n");
+    if(tokens != 2 || !strstr(cmd_tokens[1],"%")) {
+        fprintf(stderr, "Invalid usage of kill\n");
         return;
     }
+
     int job_num = atoi(cmd_tokens[1]);
     if(table[job_num].active == 1) {
-        if(kill(table[job_num].pid, SIGKILL) < 0)                 /* For sending signal mentioned to job mentioned */
+        if(kill(table[job_num].pid, SIGTERM) < 0)                 /* For sending signal mentioned to job mentioned */
             fprintf(stderr, "Signal not sent!\n");
     }
     else fprintf(stderr, "Job not found\n");               
 }
 
-/* TODO
- * void bg (int tokens, char** cmd_tokens)
- */
+void bg (int tokens, char** cmd_tokens){
+    if(tokens != 2 || !strstr(cmd_tokens[1],"%")) {
+        fprintf(stderr, "Invalid usage of bg\n");
+        return;
+    }
+
+    int job_num = atoi(cmd_tokens[1]);
+    if(table[job_num].active == 0) {
+        printf("No such job exists\n");
+        return;
+    }
+
+    if(table[job_num].active == 1 && strcmp(table[job_num].stat, "Stopped") == 0) {
+        int pid = table[job_num].pid, pgid;
+        pgid = getpgid(pid);                     /* get pgid of mentioned job */
+        if(killpg(pgid, SIGCONT) < 0)            /* Send signal to thid pgid to continue if stopped */
+            perror("Can't get in background!\n");
+        table[job_num].bg = 1;                   /* Change from background process to foreground process */
+        strcpy(table[job_num].stat,"Running");
+        tcsetpgrp(shell, my_pid);                /* Give control of terminal back to the executable */
+    }
+    else fprintf(stderr, "No job found\n");
+}
 
 void fg(int tokens, char** cmd_tokens) {
-    if(tokens != 2) {
-        fprintf(stderr, "Invalid usage of fg");
+    if(tokens != 2 || !strstr(cmd_tokens[1],"%")) {
+        fprintf(stderr, "Invalid usage of fg\n");
         return;
-    }       
+    }
 
-    int i, job_num = atoi(cmd_tokens[1]), status;
+    int job_num = atoi(cmd_tokens[1]), status;
     if(table[job_num].active == 0) {
         printf("No such job exists\n");
         return;
@@ -385,6 +408,7 @@ void fg(int tokens, char** cmd_tokens) {
             fgpid = 0;
         }
         else{
+            printf("\n");
             strcpy(table[job_num].stat,"Stopped");
         }
         tcsetpgrp(shell, my_pid);                /* Give control of terminal back to the executable */
@@ -394,10 +418,10 @@ void fg(int tokens, char** cmd_tokens) {
 
 /*********************** Functions for running the commands ***********************/
 
-void add_proc(int pid, char* name) {
+void add_proc(int pid, char* name, char* cmd) {
     table[num_jobs].pid = pid;
     table[num_jobs].name = strdup(name);
-
+    table[num_jobs].cmd = strdup(cmd);
     table[num_jobs].active = 1;
     strcpy(table[num_jobs].stat, "Running");
     num_jobs++;
@@ -448,14 +472,14 @@ int run_cmd(char** cmd_tokens, char* cmd) {
         
         int ret;
         if((ret = execvp(cmd_tokens[0], cmd_tokens)) < 0) {
-            perror("Error executing command!\n");
+            perror(cmd_tokens[0]);
             _exit(-1);
         }
         _exit(0);
     }
     if(is_bg == 0) {
         tcsetpgrp(shell, pid);                              /* Make sure the parent also gives control to child */
-        add_proc(pid, cmd_tokens[0]);
+        add_proc(pid, cmd_tokens[0], cmd);
         table[num_jobs].bg = 0;
         int status;
         fgpid = pid;
@@ -464,6 +488,7 @@ int run_cmd(char** cmd_tokens, char* cmd) {
         if(!WIFSTOPPED(status)) rem_proc(pid);         /* returns true if the child process was stopped by delivery of a signal */
  
         else{
+            printf("\n");
             strcpy(table[num_jobs-1].stat,"Stopped");
         }
         tcsetpgrp(shell, my_pgid);                     /* Give control of terminal back to the executable */
@@ -471,16 +496,19 @@ int run_cmd(char** cmd_tokens, char* cmd) {
     else {
         table[num_jobs].bg = 1;
         printf("\[%d] %d\n", num_jobs, pid);
-        add_proc(pid, cmd_tokens[0]);
+        add_proc(pid, cmd_tokens[0], cmd);
         return 0;
     }
 }
 
 void normal_cmd(int tokens, char** cmd_tokens, char* cmd_copy) {
-    int check_bg = strlen(cmd_tokens[tokens-1]) - 1;
+    char* ampersand = &cmd_tokens[tokens-1][strlen(cmd_tokens[tokens-1])-1];
     if(tokens > 0){
         if(strcmp(cmd_tokens[0], "fg\0") == 0 ){
             fg(tokens, cmd_tokens);
+        }
+        else if(strcmp(cmd_tokens[0], "bg\0") == 0 ){
+            bg(tokens, cmd_tokens);
         }
         else if(strcmp(cmd_tokens[0], "jobs\0") == 0){
             jobs();
@@ -488,8 +516,13 @@ void normal_cmd(int tokens, char** cmd_tokens, char* cmd_copy) {
         else if(strcmp(cmd_tokens[0], "kill\0") == 0){
             kjob(tokens, cmd_tokens);
         }
-        else if(strstr(cmd_tokens[tokens-1][check_bg], "&\0") == 0){
-            cmd_tokens[tokens - 1] = NULL;
+        else if(strcmp(ampersand, "&") == 0){
+            if(strcmp(cmd_tokens[tokens-1], "&\0") == 0){
+                cmd_tokens[tokens-1] = NULL;
+            }
+            else{
+                strtok(cmd_tokens[tokens-1], "&");
+            }
             is_bg = 1;
             run_cmd(cmd_tokens, cmd_copy);        // for running background process
         }
@@ -505,7 +538,7 @@ void normal_cmd(int tokens, char** cmd_tokens, char* cmd_copy) {
         else if(strcmp(cmd_tokens[0], "echo\0") == 0){
             echo(cmd_tokens, tokens, cmd_copy);
         }
-        else if(isalpha(cmd_tokens[0][0])){
+        else if(isalpha(cmd_tokens[0][0]) || strstr(cmd_tokens[0], "./") || strcmp(&cmd_tokens[0][0], "/")){
             run_cmd(cmd_tokens, cmd_copy);
         }
     }
@@ -536,7 +569,7 @@ void redi_and_pipi_cmd(char* cmd) {
         is_bg = 0;               
         pid = fork();
         if(i < num_pipe - 1)
-            add_proc(pid, cmd_tokens[0]);
+            add_proc(pid, cmd_tokens[0], cmd);
         
         if(pid != 0 ) {
             if(i == 0 ) pgid = pid;
@@ -582,6 +615,7 @@ void redi_and_pipi_cmd(char* cmd) {
             if(!WIFSTOPPED(status)) rem_proc(cpid);
 
             else{
+                printf("\n");
                 strcpy(table[num_jobs-1].stat,"Stopped");
             }
         }

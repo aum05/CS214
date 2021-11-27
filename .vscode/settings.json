@@ -3,6 +3,8 @@
         "__locale": "c",
         "functional": "c",
         "__config": "c",
-        "__string": "c"
-    }
+        "__string": "c",
+        "assert.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "Enabled"
 }

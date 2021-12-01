@@ -4,7 +4,8 @@
         "functional": "c",
         "__config": "c",
         "__string": "c",
-        "assert.h": "c"
+        "assert.h": "c",
+        "memlib.h": "c"
     },
     "C_Cpp.errorSquiggles": "Enabled"
 }

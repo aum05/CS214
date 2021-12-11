@@ -50,6 +50,8 @@
 static void *coalesce(void *ptr);
 static void *add_free_blk(size_t words);
 static void *find_first_fit(size_t block_size);
+static void *find_next_fit(size_t block_size);
+static void *find_best_fit(size_t block_size);
 static void add_block(void *ptr, size_t block_size);
 static void insert_blk_list(void *ptr); 
 static void delete_blk_list(void *ptr); 
@@ -86,7 +88,7 @@ static void *coalesce(void *ptr){
         PUT_PTR(FOOTER(ptr), FIT(size, 0));
     }
     /* If only previous block is free */  
-    else if (!PREV_ALLOC && is_next_allocated) {               
+    else if (!is_prev_allocated && is_next_allocated) {               
         size += GET_BLK_SIZE( HEADER(PREV(ptr))  );
         ptr = PREV(ptr);
         delete_blk_list(ptr);
@@ -94,7 +96,7 @@ static void *coalesce(void *ptr){
         PUT_PTR(FOOTER(ptr), FIT(size, 0));
     }
     /* Both previous and next are free */ 
-    else if (!PREV_ALLOC && !is_next_allocated) {                
+    else if (!is_prev_allocated && !is_next_allocated) {                
         size += GET_BLK_SIZE(HEADER(PREV(ptr))) + GET_BLK_SIZE( HEADER(NEXT(ptr))  );
         delete_blk_list(PREV(ptr));
         delete_blk_list(NEXT(ptr));
@@ -133,7 +135,7 @@ static void *add_free_blk(size_t words) {
 
 static void *find_first_fit(size_t block_size){
     void *ptr;
-    static int last_malloced_size = 0;
+    static int prev_malloc = 0;
     static int at_end = 0;
     if(prev_malloc == (int)block_size){
         if(at_end>30){  
@@ -157,7 +159,10 @@ static void *find_first_fit(size_t block_size){
 
 static void *find_next_fit(size_t block_size){
     void *ptr;
-    static int last_malloced_size = 0;
+    if (next_fit_ptr == NULL){
+        next_fit_ptr = exp_free_list;
+    }
+    static int prev_malloc = 0;
     static int at_end = 0;
     if(prev_malloc == (int)block_size){
         if(at_end>30){  
@@ -183,7 +188,7 @@ static void *find_next_fit(size_t block_size){
 
 static void *find_best_fit(size_t block_size){
     void *ptr;
-    static int last_malloced_size = 0;
+    static int prev_malloc = 0;
     static int at_end = 0;
     if(prev_malloc == (int)block_size){
         if(at_end>30){  
@@ -300,7 +305,7 @@ void* mymalloc(size_t size){
         break;
 
     case 2:
-        if ((ptr = find_first_fit(block_size)) != NULL) {
+        if ((ptr = find_best_fit(block_size)) != NULL) {
             add_block(ptr, block_size);
             return (ptr);
         }
@@ -386,4 +391,8 @@ void mycleanup(){
 
 double utilization(){
     return ((double)memory_used / (double)get_heap_size());
+}
+
+void reset_util(){
+    memory_used = 0;
 }

@@ -6,6 +6,11 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 
+#include <dirent.h>
+#include <sys/socket.h>
+
+#include "csapp.h"
+
 // Dimensions for the drawn grid (should be GRIDSIZE * texture dimensions)
 #define GRID_DRAW_WIDTH 640
 #define GRID_DRAW_HEIGHT 640
@@ -19,58 +24,109 @@
 // Number of cells vertically/horizontally in the grid
 #define GRIDSIZE 10
 
-typedef struct
-{
-    int x;
-    int y;
-} Position;
-
-typedef enum
-{
+typedef enum {
     TILE_GRASS,
-    TILE_TOMATO
+    TILE_TOMATO,
+    TILE_PLAYER
 } TILETYPE;
+
+typedef enum {
+    END,
+    MOVE,
+    RENDER
+} CMD;
+
+typedef enum {
+    UP,
+    DOWN,
+    LEFT,
+    RIGHT
+} MOVES;
+
+typedef struct pData {
+    int x; 
+    int y;
+    struct pData* next;
+} playerData;
 
 TILETYPE grid[GRIDSIZE][GRIDSIZE];
 
-Position playerPosition;
+playerData playerPos;
 int score;
 int level;
 int numTomatoes;
+int numPlayers;
 
 bool shouldExit = false;
 
 TTF_Font* font;
+int clientfd;
 
-// get a random value in the range [0, 1]
-double rand01()
-{
-    return (double) rand() / (double) RAND_MAX;
+playerData* playerList = NULL;
+
+int receive(int fd) {
+    int n = 0;
+    int bytesRecvd = 0;
+    int num = 0;
+    char* buf = (char*)&num;
+    while (bytesRecvd < sizeof(int)) {
+        n = read(fd, buf + bytesRecvd, (sizeof(int) - bytesRecvd));
+        if (n < 0) {
+            fprintf(stderr, "Error Code: %d\n", n);
+            return -1;
+        }
+        bytesRecvd += n;
+    }
+    return *((int*) buf);
 }
 
-void initGrid()
-{
-    for (int i = 0; i < GRIDSIZE; i++) {
-        for (int j = 0; j < GRIDSIZE; j++) {
-            double r = rand01();
-            if (r < 0.1) {
-                grid[i][j] = TILE_TOMATO;
+void writer(int fd, int num) {
+    char* buf = (char*)&num;
+    int bytesSent = 0;
+    int n = 0;
+    while (bytesSent < sizeof(int)) {
+        n = write(fd, (buf + bytesSent), (sizeof(int) - bytesSent));
+        if (n < 0) {
+            fprintf(stderr, "ErrorCode: %d\n", n);
+            return;
+        }
+        bytesSent += n;
+    }
+}
+
+void renderServer() {
+    playerPos.x = receive(clientfd);
+    playerPos.y = receive(clientfd);
+
+    if (playerList != NULL) {
+    	printf("ERROR: playerList was not NULL");
+    	exit(0);
+    }
+    numPlayers = 0;
+    numTomatoes = 0;
+    for (int x = 0; x < GRIDSIZE; x++) {
+        for (int y = 0; y < GRIDSIZE; y++) {
+            grid[x][y] = receive(clientfd);
+            if (grid[x][y] == TILE_PLAYER) {
+                if (x == playerPos.x && y == playerPos.y) {
+                    continue;
+                }
+                numPlayers++;
+                playerData* playerN = malloc(sizeof(playerData) * 1);
+                playerN->x = x;
+                playerN->y = y;
+                playerN->next = playerList;
+                playerList = playerN;         
+            } 
+            else if (grid[x][y] == TILE_TOMATO) {
                 numTomatoes++;
             }
-            else
-                grid[i][j] = TILE_GRASS;
         }
     }
-
-    // force player's position to be grass
-    if (grid[playerPosition.x][playerPosition.y] == TILE_TOMATO) {
-        grid[playerPosition.x][playerPosition.y] = TILE_GRASS;
-        numTomatoes--;
-    }
-
-    // ensure grid isn't empty
-    while (numTomatoes == 0)
-        initGrid();
+    score = receive(clientfd);
+    printf("Score: %d\n", score);
+    level = receive(clientfd);
+    printf("Level: %d\n", level);
 }
 
 void initSDL()
@@ -92,31 +148,20 @@ void initSDL()
     }
 }
 
-void moveTo(int x, int y)
+void moveTo(int x, int y, MOVES move)
 {
     // Prevent falling off the grid
     if (x < 0 || x >= GRIDSIZE || y < 0 || y >= GRIDSIZE)
         return;
 
     // Sanity check: player can only move to 4 adjacent squares
-    if (!(abs(playerPosition.x - x) == 1 && abs(playerPosition.y - y) == 0) &&
-        !(abs(playerPosition.x - x) == 0 && abs(playerPosition.y - y) == 1)) {
-        fprintf(stderr, "Invalid move attempted from (%d, %d) to (%d, %d)\n", playerPosition.x, playerPosition.y, x, y);
+    if (!(abs(playerPos.x - x) == 1 && abs(playerPos.y - y) == 0) &&
+        !(abs(playerPos.x - x) == 0 && abs(playerPos.y - y) == 1)) {
+        fprintf(stderr, "Invalid move attempted from (%d, %d) to (%d, %d)\n", playerPos.x, playerPos.y, x, y);
         return;
     }
-
-    playerPosition.x = x;
-    playerPosition.y = y;
-
-    if (grid[x][y] == TILE_TOMATO) {
-        grid[x][y] = TILE_GRASS;
-        score++;
-        numTomatoes--;
-        if (numTomatoes == 0) {
-            level++;
-            initGrid();
-        }
-    }
+    writer(clientfd, MOVE);
+    writer(clientfd, move);
 }
 
 void handleKeyDown(SDL_KeyboardEvent* event)
@@ -129,16 +174,16 @@ void handleKeyDown(SDL_KeyboardEvent* event)
         shouldExit = true;
 
     if (event->keysym.scancode == SDL_SCANCODE_UP || event->keysym.scancode == SDL_SCANCODE_W)
-        moveTo(playerPosition.x, playerPosition.y - 1);
+        moveTo(playerPos.x, playerPos.y - 1, UP);
 
     if (event->keysym.scancode == SDL_SCANCODE_DOWN || event->keysym.scancode == SDL_SCANCODE_S)
-        moveTo(playerPosition.x, playerPosition.y + 1);
+        moveTo(playerPos.x, playerPos.y + 1, DOWN);
 
     if (event->keysym.scancode == SDL_SCANCODE_LEFT || event->keysym.scancode == SDL_SCANCODE_A)
-        moveTo(playerPosition.x - 1, playerPosition.y);
+        moveTo(playerPos.x - 1, playerPos.y, LEFT);
 
     if (event->keysym.scancode == SDL_SCANCODE_RIGHT || event->keysym.scancode == SDL_SCANCODE_D)
-        moveTo(playerPosition.x + 1, playerPosition.y);
+        moveTo(playerPos.x + 1, playerPos.y, RIGHT);
 }
 
 void processInputs()
@@ -159,25 +204,37 @@ void processInputs()
 				break;
 		}
 	}
+    
 }
 
-void drawGrid(SDL_Renderer* renderer, SDL_Texture* grassTexture, SDL_Texture* tomatoTexture, SDL_Texture* playerTexture)
+void drawGrid(SDL_Renderer* renderer, SDL_Texture* grassTexture, SDL_Texture* tomatoTexture, SDL_Texture* mainPlayerTexture, SDL_Texture* nPlayerTexture)
 {
     SDL_Rect dest;
     for (int i = 0; i < GRIDSIZE; i++) {
         for (int j = 0; j < GRIDSIZE; j++) {
             dest.x = 64 * i;
             dest.y = 64 * j + HEADER_HEIGHT;
-            SDL_Texture* texture = (grid[i][j] == TILE_GRASS) ? grassTexture : tomatoTexture;
+            SDL_Texture* texture = grid[i][j] == TILE_TOMATO ? tomatoTexture : grassTexture;
             SDL_QueryTexture(texture, NULL, NULL, &dest.w, &dest.h);
             SDL_RenderCopy(renderer, texture, NULL, &dest);
         }
     }
 
-    dest.x = 64 * playerPosition.x;
-    dest.y = 64 * playerPosition.y + HEADER_HEIGHT;
-    SDL_QueryTexture(playerTexture, NULL, NULL, &dest.w, &dest.h);
-    SDL_RenderCopy(renderer, playerTexture, NULL, &dest);
+    dest.x = 64 * playerPos.x;
+    dest.y = 64 * playerPos.y + HEADER_HEIGHT;
+    SDL_QueryTexture(mainPlayerTexture, NULL, NULL, &dest.w, &dest.h);
+    SDL_RenderCopy(renderer, mainPlayerTexture, NULL, &dest);
+    playerData* prev = playerList; 
+    while (playerList != NULL) {
+        prev = playerList;
+        SDL_Rect playerN;
+        playerN.x = 64 * playerList->x;
+        playerN.y = 64 * playerList->y + HEADER_HEIGHT;
+        SDL_QueryTexture(nPlayerTexture, NULL, NULL, &playerN.w, &playerN.h);
+        SDL_RenderCopy(renderer, nPlayerTexture, NULL, &playerN);
+        playerList = playerList->next;
+        free(prev);
+    }
 }
 
 void drawUI(SDL_Renderer* renderer)
@@ -217,10 +274,13 @@ void drawUI(SDL_Renderer* renderer)
 
 int main(int argc, char* argv[])
 {
+    if(argc < 3) {
+        fprintf(stderr, "usage: %s <host> <port>\n", argv[0]);
+        exit(0);
+    }
+    
     srand(time(NULL));
-
     level = 1;
-
     initSDL();
 
     font = TTF_OpenFont("resources/Burbank-Big-Condensed-Bold-Font.otf", HEADER_HEIGHT);
@@ -229,18 +289,15 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    playerPosition.x = playerPosition.y = GRIDSIZE / 2;
-    initGrid();
-
+    playerPos.x = playerPos.y = GRIDSIZE / 2;
+	
     SDL_Window* window = SDL_CreateWindow("Client", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
-
     if (window == NULL) {
         fprintf(stderr, "Error creating app window: %s\n", SDL_GetError());
         exit(EXIT_FAILURE);
     }
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, 0);
-
 	if (renderer == NULL)
 	{
 		fprintf(stderr, "Error creating renderer: %s\n", SDL_GetError());
@@ -249,8 +306,21 @@ int main(int argc, char* argv[])
 
     SDL_Texture *grassTexture = IMG_LoadTexture(renderer, "resources/grass.png");
     SDL_Texture *tomatoTexture = IMG_LoadTexture(renderer, "resources/tomato.png");
-    SDL_Texture *playerTexture = IMG_LoadTexture(renderer, "resources/player.png");
+    SDL_Texture *nPlayerTexture = IMG_LoadTexture(renderer, "resources/player.png");
+    SDL_Texture *mainPlayerTexture = IMG_LoadTexture(renderer, "resources/playerN.png");
 
+    // server connection
+    char* host, *port;
+
+    host = argv[1];
+    port = argv[2];
+
+    clientfd = open_clientfd(host, port);
+	if (clientfd < 0) {
+		fprintf(stderr, "Connection error to server: %d\n", clientfd);
+		exit(0);
+	}
+	
     // main game loop
     while (!shouldExit) {
         SDL_SetRenderDrawColor(renderer, 0, 105, 6, 255);
@@ -258,18 +328,20 @@ int main(int argc, char* argv[])
 
         processInputs();
 
-        drawGrid(renderer, grassTexture, tomatoTexture, playerTexture);
+		writer(clientfd, RENDER);
+		renderServer();
+
+        drawGrid(renderer, grassTexture, tomatoTexture, mainPlayerTexture, nPlayerTexture);
         drawUI(renderer);
-
         SDL_RenderPresent(renderer);
-
         SDL_Delay(16); // 16 ms delay to limit display to 60 fps
     }
 
     // clean up everything
     SDL_DestroyTexture(grassTexture);
     SDL_DestroyTexture(tomatoTexture);
-    SDL_DestroyTexture(playerTexture);
+    SDL_DestroyTexture(nPlayerTexture);
+    SDL_DestroyTexture(mainPlayerTexture);
 
     TTF_CloseFont(font);
     TTF_Quit();
@@ -279,4 +351,5 @@ int main(int argc, char* argv[])
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    close(clientfd);
 }

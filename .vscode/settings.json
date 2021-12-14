@@ -5,7 +5,14 @@
         "__config": "c",
         "__string": "c",
         "assert.h": "c",
-        "memlib.h": "c"
+        "memlib.h": "c",
+        "socket.h": "c",
+        "pthread.h": "c",
+        "time.h": "c",
+        "dirent.h": "c",
+        "types.h": "c",
+        "netdb.h": "c",
+        "unistd.h": "c"
     },
     "C_Cpp.errorSquiggles": "Enabled"
 }
